@@ -56,7 +56,8 @@ Key feature is that it will start overwriting the oldest items in the buffer.
 
 We will use it as a FIFO, i.e. when popping, the oldest element will be
 returned from the buffer (but you could use this structure as well as a
-LIFO [3], popping out the newest element).
+LIFO [3], popping out the newest element - however, I dont see an application
+for a stack overwriting its oldest elements now).
 
 What is the minimum a user requires to use this data structure?
 
@@ -717,4 +718,33 @@ use our Ringbuffer, because of the simplicity of its interface.
 
 But there's more to come ...
 
-# References
+## A remark on unit tests
+
+You will have noticed that the tests we implemented only test against the
+*interface*, not the internals of the `Ringbuffer`.
+It's totally alright to also test internals, but beware of mixing interface
+tests with testing internals.
+Our tests work with *any implementation compliant with the interface
+definition* .
+If we decide to move from a linked list to a C array, we can still use the
+interface tests to verify the other implementation.
+Thus, no matter what you do, *keep interface tests separated from internal
+tests*.
+
+# Footnotes & References
+
+[1] This approach is far more universal than just for software engineering -
+for analyzing complex systems, the general approach is to separate the system
+as simple and independent parts, and minimize the interactions between them.
+[2] First-in-First-Out. typical applications are queues,
+ e.g. for communicating between threads. Actually, this very ringbuffer stems
+a audio streaming software project where it is used to pass PCM data between
+ threads.
+[3] Last-In-First-Out. Typically called 'stack' and used for parsing all kinds
+of languages, in interpreters and compilers, but also within the processor
+to store local variables and handling function calls and returns.
+[4] Draft C11 Standard, ISO/IEC 9899:201x, 6.7.2.1, Semantics, paragraph 15: 
+"A pointer to a structure  object,  suitably  converted,  points  to  its
+initial  member  (or  if  that  member  is  a bit-field,  then  to  the  unit
+in  which  it  resides),  and  vice  versa.   There  may  be  unnamed padding
+within a structure object, but not at its beginning."
