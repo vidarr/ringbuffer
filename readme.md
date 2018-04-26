@@ -62,7 +62,7 @@ What is the minimum a user requires to use this data structure?
 
 - a function to add an item to the buffer: bool `add(Ringbuffer* r, void* item)
 - a function to pop out the oldest item: `void* pop(Ringbuffer* r)`
-- Some kind of *constructor* wethod:
+- Some kind of *constructor* method:
   `Ringbuffer* ringbuffer_create(
                             size_t capacity,
                             void (*free_item)(void* additional_arg, void* item),
@@ -458,7 +458,7 @@ since a pointer to `InternalRingbuffer` equals a pointer to
  `InternalRingbuffer->public` which incidentally is a `Ringbuffer`:
 
 ```C
-InternalRingbuffer internal = calloc(1, sizefo(InternalRingbuffer));
+InternalRingbuffer internal = calloc(1, sizeof(InternalRingbuffer));
 Ringbuffer* ringbuffer = (Ringbuffer*) internal;
 ringbuffer->add(ringbuffer, item);    /* Works perfectly */
 
@@ -585,8 +585,9 @@ error:
 
 Now it becomes obvious why the 'ringbuffer_create()' function receives a
 `item_free` function as argument - to free overwritten items
-Providing the possibility to pass additional data to a callback is good practice
-- you will see an example for the usefullness of this practise later on.
+Providing the possibility to pass additional data to a callback is good
+practice - you will see an example for the usefulness of this practice
+in an instance.
 What remains is the `free()` implementation to free a Ringbuffer again.
 Again, implement a test first, then implement to pass the test.
 This test wont be a unit test, because the main functionality is just freeing
@@ -693,7 +694,7 @@ mem address to mark an entry empty:
 ```C
 static int EMPTY = 0;
 ...
-void* pop_funct(Ringbuffer* self) {
+void* pop_func(Ringbuffer* self) {
 
     ...
     void* retval = read->item;
