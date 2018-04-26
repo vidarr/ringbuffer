@@ -60,7 +60,7 @@ LIFO [3], popping out the newest element).
 
 What is the minimum a user requires to use this data structure?
 
-- a function to add an item to the buffer: bool `add(Ringbuffer* r, void* item)
+- a function to add an item to the buffer: bool `add(Ringbuffer* r, void* item)`
 - a function to pop out the oldest item: `void* pop(Ringbuffer* r)`
 - Some kind of *constructor* method:
   `Ringbuffer* ringbuffer_create(
