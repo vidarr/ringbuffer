@@ -46,6 +46,29 @@ static void* pop_func(Ringbuffer* self);
 
 static Ringbuffer* free_func(Ringbuffer* self);
 
+/******************************************************************************
+ *                         PRIVATE DATA STRUCTURES
+ ******************************************************************************/
+
+typedef struct Entry {
+    void* item;
+    struct Entry* next;
+} Entry;
+
+/*----------------------------------------------------------------------------*/
+
+typedef struct InternalRingbuffer {
+
+    Ringbuffer public;
+
+    Entry* next_entry_to_read;
+    Entry* next_entry_to_write;
+    size_t max_num_items;
+
+    void (*free_item)(void* item, void* additional_arg);
+    void* free_item_additional_arg;
+
+} InternalRingbuffer;
 
 /******************************************************************************
                                 PUBLIC FUNCTIONS
@@ -56,23 +79,41 @@ Ringbuffer* ringbuffer_create(
         void (*free_item)(void* item, void* additional_arg),
         void* free_item_additional_arg) {
 
-    assert(0 < capacity);
-
     if(0 >= capacity) {
         goto error;
     }
 
-    Ringbuffer* buffer = calloc(1, sizeof(Ringbuffer));
+    Entry* list_start = calloc(1, sizeof(Entry));
+    Entry* next = list_start;
 
-    *buffer = (Ringbuffer) {
+    for(size_t i = 1; i < capacity; ++i) {
+
+        next->next = calloc(1, sizeof(Entry));
+        next = next->next;
+
+    }
+
+    next->next = list_start;
+
+    InternalRingbuffer* buffer = calloc(1, sizeof(InternalRingbuffer));
+
+    *buffer = (InternalRingbuffer) {
+        .next_entry_to_write = list_start,
+        .next_entry_to_read = list_start,
+        .max_num_items = capacity,
+        .free_item = free_item,
+        .free_item_additional_arg = free_item_additional_arg,
+    };
+
+    buffer->public = (Ringbuffer) {
         .capacity = capacity_func,
         .add = add_func,
         .pop = pop_func,
-        .free = free_func
-
+        .free = free_func,
     };
 
-    return buffer;
+
+    return (Ringbuffer*)buffer;
 
 error:
 
@@ -80,11 +121,19 @@ error:
 }
 
 /******************************************************************************
-                               PRIVATE FUNCTIONS
+  PRIVATE FUNCTIONS
  ******************************************************************************/
 
 
 static size_t capacity_func(Ringbuffer* self) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+
+    return internal->max_num_items;
+
+error:
 
     return 0;
 
@@ -94,6 +143,30 @@ static size_t capacity_func(Ringbuffer* self) {
 
 static bool add_func(Ringbuffer* self, void* item) {
 
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+
+    Entry* read = internal->next_entry_to_read;
+    Entry* write = internal->next_entry_to_write;
+
+    if((read == write) && (0 != read->next->item)) {
+        internal->next_entry_to_read = read->next;
+    }
+
+    if((0 != write->item) && (0 != internal->free_item)) {
+        internal->free_item(
+                write->item,
+                internal->free_item_additional_arg);
+    }
+
+    write->item = item;
+    internal->next_entry_to_write = write->next;
+
+    return true;
+
+error:
+
     return false;
 
 }
@@ -102,6 +175,24 @@ static bool add_func(Ringbuffer* self, void* item) {
 
 static void* pop_func(Ringbuffer* self) {
 
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+
+    Entry* read = internal->next_entry_to_read;
+
+    if(0 == read->item) {
+        return 0;
+    }
+
+    void* retval = read->item;
+    read->item = 0;
+    internal->next_entry_to_read = read->next;
+
+    return retval;
+
+error:
+
     return 0;
 
 }
@@ -109,6 +200,35 @@ static void* pop_func(Ringbuffer* self) {
 /*----------------------------------------------------------------------------*/
 
 static Ringbuffer* free_func(Ringbuffer* self) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+
+    Entry* current = internal->next_entry_to_write;
+    Entry* start = current;
+
+    do {
+
+        Entry* next = current->next;
+
+        if((0 != current->item) && (internal->free_item)) {
+
+            internal->free_item(
+                    current->item,
+                    internal->free_item_additional_arg);
+
+        }
+
+        free(current);
+        current = next;
+
+    } while(current != start);
+
+    free(self);
+    self = 0;
+
+error:
 
     return self;
 
