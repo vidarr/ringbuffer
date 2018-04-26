@@ -119,7 +119,7 @@ So, as we got our minimal interface already, lets put this together in a
 header:
 
 ```C
-#ifnder __RINGBUFFER_H__
+#ifndef __RINGBUFFER_H__
 #define __RINGBUFFER_H__
 
 typedef struct Ringbuffer {
@@ -699,7 +699,7 @@ void* pop_func(Ringbuffer* self) {
 
     ...
     void* retval = read->item;
-    read->item = 0;
+    read->item = &EMPTY;
     ...
     /* etc */
 ```
