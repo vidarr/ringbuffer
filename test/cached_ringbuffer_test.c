@@ -88,13 +88,13 @@ void test_cached_ringbuffer_create() {
 
     buffer = buffer->free(buffer);
 
-    fprintf(stdout, "Basic ringbuffer_create OK\n");
+    fprintf(stdout, "cached ringbuffer_create OK\n");
 
 }
 
 /*----------------------------------------------------------------------------*/
 
-void count_free(void* int_pointer, void* count) {
+void count_free(void* string_pointer, void* count) {
 
     size_t* c = (size_t*) count;
     *c = *c + 1;
@@ -103,23 +103,29 @@ void count_free(void* int_pointer, void* count) {
 
 /*----------------------------------------------------------------------------*/
 
+void count_string_free(void* string_pointer, void* count) {
+
+    size_t* c = (size_t*) count;
+    *c = *c + 1;
+
+    char* string = string_pointer;
+    free(string);
+
+}
+
+/*----------------------------------------------------------------------------*/
+
 void test_cached_free() {
-
-    size_t items[25000] = {};
-
-    for(size_t i = 0; sizeof(items) / sizeof(items[0]) > i; ++i) {
-
-        items[i] = i;
-
-    }
 
     Ringbuffer* buffer = ringbuffer_create(21, cache_free, cache);
 
     size_t i = 0;
 
     while(10 > free_count) {
-        buffer->add(buffer, items + i);
-    }
+        /* just some abritrary data that has been allocated dynamically */
+        char* string = calloc(1, 100);
+        buffer->add(buffer, string);
+    };
 
     size_t initial_count = free_count;
 
@@ -149,8 +155,11 @@ int main(int argc, char** argv) {
     test_add();
     test_pop();
     test_cached_ringbuffer_create();
-    test_cached_free();
+    cache->free(cache);
 
+    free_count = 0;
+    cache = ringbuffer_create(31, count_string_free, &free_count);
+    test_cached_free();
     cache->free(cache);
 
 }
