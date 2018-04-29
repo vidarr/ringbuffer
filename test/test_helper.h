@@ -32,87 +32,23 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /*----------------------------------------------------------------------------*/
+#ifndef __TEST_HELPER_H__
+#define __TEST_HELPER_H__
 
-
-#include "test_helper.h"
-#include "../src/ringbuffer.c"
-#include <stdio.h>
-#include <assert.h>
+#include "../include/ringbuffer.h"
 
 /*----------------------------------------------------------------------------*/
 
-void test_basic_ringbuffer_create() {
-
-    Ringbuffer* buffer = 0;
-
-    buffer = ringbuffer_create(1, 0, 0);
-    assert(buffer);
-    assert(capacity_func == buffer->capacity);
-    assert(add_func == buffer->add);
-    assert(pop_func == buffer->pop);
-    assert(free_func == buffer->free);
-
-    buffer = buffer->free(buffer);
-
-    fprintf(stdout, "Basic ringbuffer_create OK\n");
-
-}
+extern Ringbuffer* (*create)(size_t, void (*)(void*, void*), void*);
+extern void (*free_item)(void*, void*);
+extern void* free_item_additional_arg;
 
 /*----------------------------------------------------------------------------*/
 
-void count_free(void* int_pointer, void* count) {
-
-    int* ip = (int*) int_pointer;
-    free(ip);
-    size_t* c = (size_t*) count;
-    *c = *c + 1;
-
-}
-/*----------------------------------------------------------------------------*/
-
-void test_free() {
-
-    int a = 1;
-
-    Ringbuffer* buffer = 0;
-    assert(0 == free_func(0));
-
-    buffer = ringbuffer_create(1, 0, 0);
-    assert(0 == buffer->free(buffer));
-
-    buffer = ringbuffer_create(21, 0, 0);
-    assert(0 == buffer->free(buffer));
-
-    buffer = ringbuffer_create(21, 0, 0);
-    for(size_t i = 0; i < buffer->capacity(buffer); ++i) {
-        buffer->add(buffer, &a);
-    }
-    assert(0 == buffer->free(buffer));
-
-    size_t count = 0;
-    buffer = ringbuffer_create(21, count_free, &count);
-    for(size_t i = 0; i < buffer->capacity(buffer); ++i) {
-        int* ip = calloc(1, sizeof(int));
-        *ip = i;
-        buffer->add(buffer, ip);
-    }
-    assert(0 == buffer->free(buffer));
-    assert(21 == count);
-
-    fprintf(stdout, "free() OK\n");
-
-}
+void test_ringbuffer_create();
+void test_capacity();
+void test_add();
+void test_pop();
 
 /*----------------------------------------------------------------------------*/
-int main(int argc, char** argv) {
-
-    test_ringbuffer_create();
-    test_capacity();
-    test_add();
-    test_pop();
-    test_basic_ringbuffer_create();
-    test_free();
-
-}
-
-/*----------------------------------------------------------------------------*/
+#endif

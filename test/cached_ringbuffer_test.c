@@ -39,9 +39,43 @@
 #include <stdio.h>
 #include <assert.h>
 
+/*----------------------------------------------------------------------------
+                               Cached ringbuffer
+  ----------------------------------------------------------------------------*/
+
+/**
+ * This is the global cache.
+ */
+static Ringbuffer* cache = 0;
+
+static size_t free_count = 0;
+
 /*----------------------------------------------------------------------------*/
 
-void test_basic_ringbuffer_create() {
+void cache_free(void* item, void* cache) {
+
+    if(0 == cache) goto finish;
+    if(0 == item) goto finish;
+
+    Ringbuffer* ringbuffer_cache = cache;
+
+    if(! ringbuffer_cache->add(ringbuffer_cache, item)) {
+
+        fprintf(stderr, "Could not enqueue item into cache");
+
+    }
+
+finish:
+
+    do{}while(0);
+
+}
+
+/*----------------------------------------------------------------------------
+                                  ACTUAL TESTS
+  ----------------------------------------------------------------------------*/
+
+void test_cached_ringbuffer_create() {
 
     Ringbuffer* buffer = 0;
 
@@ -62,42 +96,42 @@ void test_basic_ringbuffer_create() {
 
 void count_free(void* int_pointer, void* count) {
 
-    int* ip = (int*) int_pointer;
-    free(ip);
     size_t* c = (size_t*) count;
     *c = *c + 1;
 
 }
+
 /*----------------------------------------------------------------------------*/
 
-void test_free() {
+void test_cached_free() {
 
-    int a = 1;
+    size_t items[25000] = {};
 
-    Ringbuffer* buffer = 0;
-    assert(0 == free_func(0));
+    for(size_t i = 0; sizeof(items) / sizeof(items[0]) > i; ++i) {
 
-    buffer = ringbuffer_create(1, 0, 0);
-    assert(0 == buffer->free(buffer));
+        items[i] = i;
 
-    buffer = ringbuffer_create(21, 0, 0);
-    assert(0 == buffer->free(buffer));
-
-    buffer = ringbuffer_create(21, 0, 0);
-    for(size_t i = 0; i < buffer->capacity(buffer); ++i) {
-        buffer->add(buffer, &a);
     }
-    assert(0 == buffer->free(buffer));
 
-    size_t count = 0;
-    buffer = ringbuffer_create(21, count_free, &count);
-    for(size_t i = 0; i < buffer->capacity(buffer); ++i) {
-        int* ip = calloc(1, sizeof(int));
-        *ip = i;
-        buffer->add(buffer, ip);
+    Ringbuffer* buffer = ringbuffer_create(21, cache_free, cache);
+
+    size_t i = 0;
+
+    while(10 > free_count) {
+        buffer->add(buffer, items + i);
     }
+
+    size_t initial_count = free_count;
+
+    /* Shift some elements out of cache into ringbuffer */
+    for(i = 0; i < 3 * buffer->capacity(buffer); ++i) {
+        size_t* item = cache->pop(cache);
+        assert(item);
+        buffer->add(buffer, item);
+    }
+
+    assert(initial_count == free_count);
     assert(0 == buffer->free(buffer));
-    assert(21 == count);
 
     fprintf(stdout, "free() OK\n");
 
@@ -106,12 +140,18 @@ void test_free() {
 /*----------------------------------------------------------------------------*/
 int main(int argc, char** argv) {
 
+    cache = ringbuffer_create(31, count_free, &free_count);
+    free_item = cache_free;
+    free_item_additional_arg = cache;
+
     test_ringbuffer_create();
     test_capacity();
     test_add();
     test_pop();
-    test_basic_ringbuffer_create();
-    test_free();
+    test_cached_ringbuffer_create();
+    test_cached_free();
+
+    cache->free(cache);
 
 }
 
