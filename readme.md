@@ -532,7 +532,7 @@ error:
 ```
 
 As you see, we use the dreaded 'goto' here.
-Again, gotos are in general a bad idea, except for handling error conditions.
+Again, gotos are in general a bad idea, except under certain conditions.
 If you think about it, try/catch blocks in object oriented languages are just
 gotos in disguise.
 
@@ -763,8 +763,8 @@ on something different:
 Assume you got a time-critical application, and you did already some profiling
 and optimisation.
 
-As it turns out, at some point you will notice that calling `malloc(2)` or
-`calloc(2)` does not come for free but consumes some processor time.
+As it turns out, at some point you will notice that calling `malloc(3)` or
+`calloc(3)` does not come for free but consumes some processor time.
 Why is this the case?
 In fact, the operating system does not really provide for a memory manager
 that you can query for, lets say, 90 bytes.
@@ -778,10 +778,10 @@ Your process will be given a certain, contiguous block of *real* RAM memory,
  `0xff00 0000`.
 All you can ask the system for is raise the bounds of this *real memory window*,
 let's say from `0xff00 0000` to `0xff00 ffff`.
-That is, however, not how `malloc(2)` behaves.
-That's because under the hood, `malloc(2)` performs quite a bit of management:
+That is, however, not how `malloc(3)` behaves.
+That's because under the hood, `malloc(3)` performs quite a bit of management:
 It keeps track of free memory blocks.
-If you request a certain number of bytes, `malloc(2)` will sweep through it's
+If you request a certain number of bytes, `malloc(3)` will sweep through it's
 list looking for a suitable block.
 Often enough, it won't find one that fits the requested size *exactly*, thus it
 will have to do some adjustments, either shrink a block, or claim a raise
@@ -966,15 +966,29 @@ error:
 
 That's all that is to facilitating a Ringbuffer as a cache.
 
-### Writing easy code: Nested Ifs
+### Writing simple code: Nested Ifs
 
 Notice the particular control flow in these functions, particularly in
 `data_buffer_get`:
 
 In my opinion, it does not pay off to nest ever deeper levels of
 `if`.
-In fact, I suggest to test one condition after the other, without nesting,
-and avoid else branches by just short-cutting behind the sequence of ifs
+In fact, I suggest to test one condition after the other, without nesting.
+
+This simplifies understanding the code, since you can turn your code into
+a rather simple list, where you ensure one condition, one after the other,
+building slowly towards your final goal.
+
+Have a look at the `data_buffer_get()` function:
+
+1. It tries to pop a data buffer from the cache if there is a cache.
+2. If we do not have a data buffer yet, it tries to allocate a new one - no matter if the popping failed or for whatever reason there is not data buffer yet.
+3. Now we know that we have a data buffer, but we still do not know its state - does it have some `data` allocated already? Is the `data` array large enough?
+4. Again, treat one problem after the other: If the data array is too small, free it and set `data` to 0
+5. If `data` is 0, allocate it with a sufficient size. Again, it does not matter whether it is 0 because we allocated the data buffer` freshly or because we freed it due to its insufficient size.
+6. Now we know that no matter how we came here, we got a data buffer, it is properly initialized and has sufficent capacity.
+
+Also, avoid else branches by just short-cutting behind the sequence of ifs
 by using a goto.
 
 Gotos are considered harmful, and I consider this true as well - if used by
@@ -1040,7 +1054,7 @@ I am not in doubt in this example, though.
 I cannot give an algorithm on how to transform *any* structure of nested ifs
 into a straight one-level if sequence nor can I prove that this is always
 possible.
-In my experience, however, I never stumbled upon a problem that forced my
+In my experience, however, I never stumbled upon a problem that forced me
 to code some beast like the first version up there.
 
 My suggestion is:
