@@ -83,7 +83,7 @@ We will therefore tie the functions as function pointers to our Ringbuffer.
 Actually, the `Ringbuffer` itself needs to only be a collection of function
 pointers (from the users' point of view, and that whats matters for now):
 
-```C
+```c
 
 typedef struct Ringbuffer {
     size_t        (*capacity) (struct Ringbuffer* self);
@@ -118,7 +118,8 @@ This is the first beginners' rule of thumb we are going to break.
 So, as we got our minimal interface already, lets put this together in a
 header:
 
-```C
+```c
+
 #ifndef __RINGBUFFER_H__
 #define __RINGBUFFER_H__
 
@@ -152,7 +153,8 @@ which is currently the constructor method only.
 Thus, start of copying its prototype over to an empty source file and include
 our glorious header:
 
-```C
+```c
+
 #include "../include/ringbuffer.h"
 
 /******************************************************************************
@@ -177,7 +179,8 @@ error:
 And because we want to implement rock-solid code, write a neat unit test for
 checking that the function does what it is supposed to:
 
-```C
+```c
+
 #include "../src/ringbuffer.c"
 #include <stdio.h>
 #include <assert.h>
@@ -216,7 +219,8 @@ And- you got your first program that compiles and will execute.
 But of course, the unit test will fail since our constructor does not construct
 anything. Lets make the test pass by extending your source code to:
 
-```C
+```c
+
 static size_t capacity_func(Ringbuffer* self);
 static bool add_func(Ringbuffer* self, void* item);
 static void* pop_func(Ringbuffer* self);
@@ -273,7 +277,8 @@ But, it's entirely usesless as it only provides dummy functions.
 So, carry on by first thinking about the `add()` and `pop()` methods, then
 implement unit tests to check for their proper functionality:
 
-```C
+```c
+
 ...
 
 void test_add() {
@@ -404,11 +409,13 @@ entry links back to the beginning (creating a ring - hence "ring buffer' ).
 Thus we require some helper data type to store 1 item and a pointer to the
 following entry:
 
-```C
+```c
+
 typedef struct Entry {
     void* datum;
     struct Entry* next;
 }
+
 ```
 
 Does the user require this struct? No, its an implementation detail that better
@@ -429,7 +436,8 @@ Gracefully, the C standard provides a neat feature:
 
 This means, that
 
-```C
+```c
+
 Ringbuffer* buffer = ringbuffer_create(1, 0, 0);
 
 assert(buffer == buffer->capacity);
@@ -439,7 +447,8 @@ For example.
 
 We can exploit that by *extending a structure without having to alter it's definition*:
 
-```C
+```c
+
 typedef struct InternalRingbuffer {
 
     Ringbuffer public;
@@ -458,7 +467,8 @@ We can safely cast a pointer to an `InternalRingbufer` to `Ringbuffer`
 since a pointer to `InternalRingbuffer` equals a pointer to
  `InternalRingbuffer->public` which incidentally is a `Ringbuffer`:
 
-```C
+```c
+
 InternalRingbuffer internal = calloc(1, sizeof(InternalRingbuffer));
 Ringbuffer* ringbuffer = (Ringbuffer*) internal;
 ringbuffer->add(ringbuffer, item);    /* Works perfectly */
@@ -472,7 +482,8 @@ Since this is private stuff, this definition goes into the source file.
 
 So, let's enhance our constructor function to create a 'working' ringbuffer:
 
-```C
+```c
+
 Ringbuffer* ringbuffer_create(
         size_t capacity,
         void (*free_item)(void* item, void* additional_arg),
@@ -527,7 +538,8 @@ gotos in disguise.
 
 Now, nothing prevents us from implementing `add()` and `pop()`:
 
-```C
+```c
+
 static bool add_func(Ringbuffer* self, void* item) {
 
     if(0 == self) goto error;
@@ -596,7 +608,8 @@ obsolete allocations.
 However, you can check for segfaults and have the test run with valgrind(1) or
 other memory leak detection tools:
 
-```C
+```c
+
 void count_free(void* int_pointer, void* count) {
 
     int* ip = (int*) int_pointer;
@@ -645,7 +658,8 @@ pass over arbitrary additional data to handlers like the `free_item()` function.
 
 The last thing to do is actually implement the `free()`:
 
-```C
+```c
+
 static Ringbuffer* free_func(Ringbuffer* self) {
 
     if(0 == self) goto error;
@@ -692,7 +706,8 @@ whyever one would like to do so.
 You could work around this by just declaring a static variable and using its
 mem address to mark an entry empty:
 
-```C
+```c
+
 static int EMPTY = 0;
 ...
 void* pop_func(Ringbuffer* self) {
@@ -730,6 +745,320 @@ If we decide to move from a linked list to a C array, we can still use the
 interface tests to verify the other implementation.
 Thus, no matter what you do, *keep interface tests separated from internal
 tests*.
+
+/*0*/
+
+## Use the ringbuffer as a cache
+
+So we got a neat ringbuffer, that will receive data and overwrite old
+data on insuffient memory.
+
+Lets try to use our ring buffer in some way.
+
+What could this actually useful for?
+We already discussed that it is perfectly suited for a stream of data has to
+be handed over to another thread for media streaming e.g.
+
+However, such an application is complicated and rather huge, thus lets focus
+on something different:
+
+Assume you got a time-critical application, and you did already some profiling
+and optimisation.
+
+As it turns out, at some point you will notice that calling `malloc(2)` or
+`calloc(2)` does not come for free but consumes some processor time.
+
+Why is this the case?
+
+In fact, the operating system does not really provide for a memory manager
+that you can query for, lets say, 90 bytes.
+
+Your process receives a dedicated address space, which in theory ranges from
+
+0x0 to 0xffff ffff ffff ffff on a 32 bit system.
+However, most of the addresses will not be existing for real,
+ it's your process *virtual address space*.
+Your process will be given a certain, contiguous block of *real* RAM memory,
+ mapped into its virtual address space, let's say in betwen 0xffff and
+ 0xff00 0000.
+All you can ask the system for is raise the bounds of this *real memory window*,
+let's say from 0xff00 0000 to 0xff00 ffff.
+
+That is, however, not how `malloc(2)` behaves.
+
+That's because under the hood, `malloc(2)` performs quite a bit of management:
+It keeps track of free memory blocks.
+If you request a certain number of bytes, `malloc(2)` will sweep through it's
+list looking for a suitable block.
+Often enough, it won't find one that fits the requested size *exactly*, thus it
+will have to do some adjustments, either shrink a block, or claim a raise
+of the memory bounds as discussed above.
+
+If you free a block, it will put this block back into the list of available
+blocks.
+In order to counter total fragmentation, it will try to merge to adjacent
+available blocks into one bigger one.
+
+One could call it a poor man's crippled garbage collector.
+
+A lot of stuff that usually goes unnoticed.
+
+And costs time.
+
+Thus at some point of optimisation, it pays off to avoid *mallocs*.
+How can this be achieved?
+One trait to go is recycling of memory blocks.
+
+Let's look at an example:
+
+Assume you store your app data in buffers like
+
+```c
+
+typedef struct {
+
+    size_t capacity_bytes;
+    size_t bytes_used;
+    uint8_t* data;
+
+} DataBuffer;
+
+```
+
+You read in data from some I/O device like so
+
+```c
+
+DataBuffer* db = data_buffer_create(255);
+db->bytes_used = read(fd, db->data, db->capacity_bytes);
+
+process_data(db);
+
+data_buffer_free(db);
+db = 0;
+```
+
+You could avoid allocating and freeing your data buffers if you do this several
+times by just allocating *one* data buffer and keep reusing it like:
+
+```c
+
+DataBuffer* db = data_buffer_create(255);
+
+...
+
+while(go_on_reading) {
+
+    if(num_bytes_to_read > db->capacity_bytes) {
+        free(db->data);
+        db->data = malloc(num_bytes_to_read);
+        db->capacity_bytes = num_bytes_to_read;
+    }
+
+    db->bytes_used = 0;
+
+    db->bytes_used = read(fd, db->data, db->capacity_bytes);
+
+    process_data(db);
+
+}
+
+free(db);
+db = 0;
+
+```
+
+That's fine, but what if your program does not consist of a single big loop, but
+is more complicated, allocates and frees DataBuffers on various locations in
+the code?
+
+Here, our Ringbuffer pops in - it's perfectly suited for caching.
+the basic idea is that `data_buffer_free` actually adds the DataBuffer to free
+into a Ringbuffer, and `data_buffer_create` first of all tries to pop a
+DataBuffer from the Ringbuffer.
+
+you could then write the upper loop e.g. like this:
+
+```c
+
+Ringbuffer* cache = 0;
+cache = ringbuffer_create(NUM_DATABUFFERS_TO_CACHE, data_buffer_free, 0);
+
+DataBuffer* db = 0;
+
+...
+
+while(go_on_reading) {
+
+
+    db = data_buffer_get(cache, 255);
+    db->bytes_used = read(fd, db->data, db->capacity_bytes);
+
+    process_data(db);
+
+    data_buffer_release(cache, db);
+    db = 0;
+
+}
+
+```
+
+That looks quite simpler as the second loop example.
+Moreover, you can easily cache all your DataBuffers whereever you use them
+just by calling either `data_buffer_get()` or `data_buffer_release`.
+
+The implementation of both methods will be rather forward:
+
+```c
+
+DataBuffer* data_buffer_get(Ringbuffer* cache, size_t min_length_bytes) {
+
+    DataBuffer* db =  0;
+
+    if(0 != cache) {
+        db = cache->pop(cache);
+    }
+
+    if(0 == db) {
+        db = calloc(1, sizeof(DataBuffer));
+    }
+
+    if(db->capacity_bytes < min_length_bytes) {
+        if(0 != db->data) {
+            free(db->data);
+            db->data = 0;
+        }
+    }
+
+    if(0 == db->data) {
+        db->data = calloc(1, sizeof(min_length_bytes) * sizeof(uint8_t));
+        db->capacity_bytes = min_length_bytes;
+    }
+
+    db->bytes_used = 0;
+
+    return db;
+
+}
+
+
+void data_buffer_release(Ringbuffer* cache, DataBuffer* db) {
+
+    if(0 != cache) {
+        cache->add(cache,db);
+        goto finish;
+    }
+
+    data_buffer_free(db);
+
+finish:
+
+    return;
+
+}
+
+void data_buffer_free(void* data_buffer, void* additional_arg) {
+
+    if(0 == data_buffer) goto error;
+    DataBuffer* db = data_buffer;
+
+    if(0 != db->data) {
+        free(db->data);
+        db->data = 0;
+    }
+
+    free(db);
+
+error:
+
+    return;
+
+}
+```
+
+That's all that is to facilitating a Ringbuffer as a cache.
+
+### Writing easy code: Nested Ifs
+
+Notice the particular control flow in these functions, particularly in
+`data_buffer_get`:
+
+In my opinion, it does not pay off to nest ever deeper levels of
+`if`.
+In fact, I suggest to test one condition after the other, without nesting,
+and avoid else branches by just short-cutting behind the sequence of ifs
+by using a goto.
+
+Gotos are considered harmful, and I consider this true as well - if used by
+beginners or in abundance or uncontrolled manner.
+A toxic like digitalis should be avoided by the not knowing.
+But experts can do great good with small amounts of it.
+
+One use case is to have a sequence of `if` statements, and just use gotos
+in their bodies to skip over the remainder of the ifs - avoiding complicated
+else constructs.
+
+Instead of doing something like
+
+```c
+
+if(a) {
+    if(b &&  !c) {
+        do_b_and_not_c();
+    } else {
+        if(d) {
+            do_not_b_or_c_and_d();
+        }
+        do_not_b_or_c();
+    }
+} else {
+    do_not_a();
+}
+```
+
+do it like this:
+
+```c
+
+    if( ! a) {
+        do_not_a();
+        goto finish;
+    }
+
+    assert(a); /* we do not need the if(a) any more, becaus a must be true in here */
+
+    if(b && ! c) {
+        do_b_and_not_c();
+        goto finish;
+    }
+
+    if(d) {
+        do_not_b_or_c_and_d();
+    }
+
+    do_not_b_or_c();
+
+finish:
+
+    /* and we are done */
+```
+
+At least in my humble opinion, the second version is far easier to understand,
+despite the dreaded gotos.
+
+Do not misunderstand: If in doubt, relinquish from using gotos.
+I am not in doubt in this example, though.
+
+I cannot give an algorithm on how to transform *any* structure of nested ifs
+into a straight one-level if sequence nor can I prove that this is always
+possible.
+In my experience, however, I never stumbled upon a problem that forced my
+to code some beast like the first version up there.
+
+My suggestion is:
+If you encounter yourself writing nested ifs, take some time to consider
+if there is a way to streamline this part of your code into a single-level
+if sequence. It will turn out to work surprisingly often.
 
 # Footnotes & References
 
