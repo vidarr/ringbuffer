@@ -752,9 +752,7 @@ tests*.
 
 So we got a neat ringbuffer, that will receive data and overwrite old
 data on insuffient memory.
-
 Lets try to use our ring buffer in some way.
-
 What could this actually useful for?
 We already discussed that it is perfectly suited for a stream of data has to
 be handed over to another thread for media streaming e.g.
@@ -767,25 +765,20 @@ and optimisation.
 
 As it turns out, at some point you will notice that calling `malloc(2)` or
 `calloc(2)` does not come for free but consumes some processor time.
-
 Why is this the case?
-
 In fact, the operating system does not really provide for a memory manager
 that you can query for, lets say, 90 bytes.
-
 Your process receives a dedicated address space, which in theory ranges from
 
-0x0 to 0xffff ffff ffff ffff on a 32 bit system.
+`0x0` to `0xffff ffff ffff ffff` on a 32 bit system.
 However, most of the addresses will not be existing for real,
  it's your process *virtual address space*.
 Your process will be given a certain, contiguous block of *real* RAM memory,
- mapped into its virtual address space, let's say in betwen 0xffff and
- 0xff00 0000.
+ mapped into its virtual address space, let's say in betwen `0xffff` and
+ `0xff00 0000`.
 All you can ask the system for is raise the bounds of this *real memory window*,
-let's say from 0xff00 0000 to 0xff00 ffff.
-
+let's say from `0xff00 0000` to `0xff00 ffff`.
 That is, however, not how `malloc(2)` behaves.
-
 That's because under the hood, `malloc(2)` performs quite a bit of management:
 It keeps track of free memory blocks.
 If you request a certain number of bytes, `malloc(2)` will sweep through it's
@@ -793,18 +786,13 @@ list looking for a suitable block.
 Often enough, it won't find one that fits the requested size *exactly*, thus it
 will have to do some adjustments, either shrink a block, or claim a raise
 of the memory bounds as discussed above.
-
 If you free a block, it will put this block back into the list of available
 blocks.
 In order to counter total fragmentation, it will try to merge to adjacent
 available blocks into one bigger one.
-
 One could call it a poor man's crippled garbage collector.
 
-A lot of stuff that usually goes unnoticed.
-
-And costs time.
-
+A lot of stuff that usually goes unnoticed - And costs time.
 Thus at some point of optimisation, it pays off to avoid *mallocs*.
 How can this be achieved?
 One trait to go is recycling of memory blocks.
