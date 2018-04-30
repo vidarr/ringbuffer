@@ -38,19 +38,26 @@
 #include "../src/ringbuffer.c"
 #include <stdio.h>
 #include <assert.h>
-
-/*----------------------------------------------------------------------------
-                               Cached ringbuffer
-  ----------------------------------------------------------------------------*/
-
-/**
- * This is the global cache.
- */
-static Ringbuffer* cache = 0;
-
-static size_t free_count = 0;
+#include <stdint.h>
 
 /*----------------------------------------------------------------------------*/
+
+static void count_free(void* item, void* additional_arg) {
+
+    if(0 == additional_arg) goto error;
+
+    size_t* counter = additional_arg;
+    ++counter;
+
+error:
+
+    return;
+
+}
+
+/*----------------------------------------------------------------------------
+ *                             Cached ringbuffer
+ *----------------------------------------------------------------------------*/
 
 void cache_free(void* item, void* cache) {
 
@@ -92,24 +99,75 @@ void test_cached_ringbuffer_create() {
 
 }
 
+/*----------------------------------------------------------------------------
+ *                          More sophisiticated cache
+ *----------------------------------------------------------------------------*/
+
+/**
+ * A data buffer to hold arbitrary data
+ */
+typedef struct {
+
+    size_t capacity_bytes;
+    size_t bytes_used;
+    uint8_t* data;
+
+} DataBuffer;
+
 /*----------------------------------------------------------------------------*/
 
-void count_free(void* string_pointer, void* count) {
+DataBuffer* get_data_buffer(Ringbuffer* cache, size_t min_length_bytes) {
 
-    size_t* c = (size_t*) count;
-    *c = *c + 1;
+    DataBuffer* db =  0;
+
+    if(0 != cache) {
+        db = cache->pop(cache);
+    }
+
+    if(0 == db) {
+        db = calloc(1, sizeof(DataBuffer));
+    }
+
+    if(db->capacity_bytes < min_length_bytes) {
+        if(0 != db->data) {
+            free(db->data);
+            db->data = 0;
+        }
+    }
+
+    if(0 == db->data) {
+        db->data = calloc(1, sizeof(min_length_bytes) * sizeof(uint8_t));
+        db->capacity_bytes = min_length_bytes;
+    }
+
+    db->bytes_used = 0;
+
+    return db;
 
 }
 
 /*----------------------------------------------------------------------------*/
 
-void count_string_free(void* string_pointer, void* count) {
+void free_data_buffer(void* data_buffer, void* arg) {
 
-    size_t* c = (size_t*) count;
-    *c = *c + 1;
+    if(0 != arg) {
+        size_t* counter = arg;
+        *counter = 1 + *counter;
+    }
 
-    char* string = string_pointer;
-    free(string);
+    if(0 == data_buffer) goto error;
+    DataBuffer* db = data_buffer;
+
+    if(0 != db->data) {
+        free(db->data);
+        db->data = 0;
+    }
+
+    free(db);
+
+error:
+
+    return;
 
 }
 
@@ -117,36 +175,47 @@ void count_string_free(void* string_pointer, void* count) {
 
 void test_cached_free() {
 
+    size_t frees_count = 0;
+
+    Ringbuffer* cache =
+        ringbuffer_create(50, free_data_buffer, &frees_count);
+
     Ringbuffer* buffer = ringbuffer_create(21, cache_free, cache);
 
     size_t i = 0;
 
-    while(10 > free_count) {
+    while(10 > frees_count) {
         /* just some abritrary data that has been allocated dynamically */
-        char* string = calloc(1, 100);
-        buffer->add(buffer, string);
+        ++i;
+        /* We want to create really new data buffers, thus cache == 0 ... */
+        DataBuffer* db = get_data_buffer(0, 13);
+        buffer->add(buffer, db);
     };
 
-    size_t initial_count = free_count;
+    size_t initial_count = frees_count;
 
     /* Shift some elements out of cache into ringbuffer */
     for(i = 0; i < 3 * buffer->capacity(buffer); ++i) {
-        size_t* item = cache->pop(cache);
+        DataBuffer* item = get_data_buffer(cache, i);
         assert(item);
         buffer->add(buffer, item);
     }
 
-    assert(initial_count == free_count);
+    assert(initial_count == frees_count);
     assert(0 == buffer->free(buffer));
 
-    fprintf(stdout, "free() OK\n");
+    cache = cache->free(cache);
+
+    fprintf(stdout, "free() OK: %zu\n", frees_count);
 
 }
 
 /*----------------------------------------------------------------------------*/
 int main(int argc, char** argv) {
 
-    cache = ringbuffer_create(31, count_free, &free_count);
+    /* The interface tests */
+    size_t free_count = 0;
+    Ringbuffer* cache = ringbuffer_create(31, count_free, &free_count);
     free_item = cache_free;
     free_item_additional_arg = cache;
 
@@ -154,13 +223,12 @@ int main(int argc, char** argv) {
     test_capacity();
     test_add();
     test_pop();
-    test_cached_ringbuffer_create();
     cache->free(cache);
+    cache = 0;
 
-    free_count = 0;
-    cache = ringbuffer_create(31, count_string_free, &free_count);
+    /* Caching tests */
+    test_cached_ringbuffer_create();
     test_cached_free();
-    cache->free(cache);
 
 }
 
