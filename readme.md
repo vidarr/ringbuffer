@@ -993,7 +993,7 @@ by using a goto.
 
 Gotos are considered harmful, and I consider this true as well - if used by
 beginners or in abundance or uncontrolled manner.
-A toxic like digitalis should be avoided by the not knowing.
+Gotos are like a toxic like digitalis: It should be avoided by the not knowing.
 But experts can do great good with small amounts of it.
 
 One use case is to have a sequence of `if` statements, and just use gotos
