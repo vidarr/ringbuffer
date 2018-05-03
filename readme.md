@@ -825,12 +825,12 @@ You read in data from some I/O device like so
 
 ```c
 
-Buffer* db = buffercache_create(255);
+Buffer* db = buffer_create(255);
 db->bytes_used = read(fd, db->data, db->capacity_bytes);
 
 process_data(db);
 
-buffercache_release_buffer(db);
+buffer_free(db);
 db = 0;
 ```
 
@@ -839,7 +839,7 @@ times by just allocating *one* data buffer and keep reusing it like:
 
 ```c
 
-Buffer* db = buffercache_create(255);
+Buffer* db = buffer_create(255);
 
 ...
 
@@ -859,7 +859,7 @@ while(go_on_reading) {
 
 }
 
-free(db);
+buffer_free(db);
 db = 0;
 
 ```
