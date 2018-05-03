@@ -731,7 +731,15 @@ have to change in order to gain speed e.g. is inaccessible by the user.
 He will not be tempted to understand the gory details, enabling it to rapidly
 use our Ringbuffer, because of the simplicity of its interface.
 
-But there's more to come ...
+One slight drawback in here is the need to stay flexible we have to resort back
+to `void*` types. This is in general nasty: It disables one of the key
+advantages statically typed langueages provide over dynamically typed languages
+like Python: The ability to check *at compiletime*, thus *without runtime
+overhead*, avoid an entire class of programming errors.
+
+Unfortunately, in C `void*` cannot be avoided all the time.
+As always, there's always tradeoffs: Here we trade type safety for flexibility.
+Do this with care!
 
 ## A remark on unit tests
 
@@ -745,16 +753,6 @@ If we decide to move from a linked list to a C array, we can still use the
 interface tests to verify the other implementation.
 Thus, no matter what you do, *keep interface tests separated from internal
 tests*.
-
-One slight drawback in here is the need to stay flexible we have to resort back
-to `void*` types. This is in general nasty: It disables one of the key
-advantages statically typed langueages provide over dynamically typed languages
-like Python: The ability to check *at compiletime*, thus *without runtime
-overhead*, avoid an entire class of programming errors.
-
-Unfortunately, in C `void*` cannot be avoided all the time.
-As always, there's always tradeoffs: Here we trade type safety for flexibility.
-Do this with care!
 
 /*0*/
 
