@@ -901,7 +901,7 @@ while(go_on_reading) {
 
 That looks quite simpler as the second loop example.
 Moreover, you can easily cache all your DataBuffers whereever you use them
-just by calling either `data_buffer_get()` or `data_buffer_release`.
+just by calling either `buffercache_get_buffer()` or `buffercache_release_buffer()`.
 
 So, let's implement a cache for DataBuffers.
 Sticking to our dogma, first design the interface.
@@ -1096,7 +1096,7 @@ to have to deal with it, at least.
 ### Writing simple code: Nested Ifs
 
 Notice the particular control flow in these functions, particularly in
-`data_buffer_get`:
+`buffercache_get_buffer()`:
 
 In my opinion, it does not pay off to nest ever deeper levels of
 `if`.
