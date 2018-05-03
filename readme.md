@@ -746,6 +746,16 @@ interface tests to verify the other implementation.
 Thus, no matter what you do, *keep interface tests separated from internal
 tests*.
 
+One slight drawback in here is the need to stay flexible we have to resort back
+to `void*` types. This is in general nasty: It disables one of the key
+advantages statically typed langueages provide over dynamically typed languages
+like Python: The ability to check *at compiletime*, thus *without runtime
+overhead*, avoid an entire class of programming errors.
+
+Unfortunately, in C `void*` cannot be avoided all the time.
+As always, there's always tradeoffs: Here we trade type safety for flexibility.
+Do this with care!
+
 /*0*/
 
 ## Use the ringbuffer as a cache
@@ -809,7 +819,7 @@ typedef struct {
     size_t bytes_used;
     uint8_t* data;
 
-} DataBuffer;
+} Buffer;
 
 ```
 
@@ -817,12 +827,12 @@ You read in data from some I/O device like so
 
 ```c
 
-DataBuffer* db = data_buffer_create(255);
+Buffer* db = buffercache_create(255);
 db->bytes_used = read(fd, db->data, db->capacity_bytes);
 
 process_data(db);
 
-data_buffer_free(db);
+buffercache_release_buffer(db);
 db = 0;
 ```
 
@@ -831,7 +841,7 @@ times by just allocating *one* data buffer and keep reusing it like:
 
 ```c
 
-DataBuffer* db = data_buffer_create(255);
+Buffer* db = buffercache_create(255);
 
 ...
 
@@ -872,19 +882,19 @@ you could then write the upper loop e.g. like this:
 Ringbuffer* cache = 0;
 cache = ringbuffer_create(NUM_DATABUFFERS_TO_CACHE, data_buffer_free, 0);
 
-DataBuffer* db = 0;
+Buffer* db = 0;
 
 ...
 
 while(go_on_reading) {
 
 
-    db = data_buffer_get(cache, 255);
+    db = buffercache_get_buffer(cache, 255);
     db->bytes_used = read(fd, db->data, db->capacity_bytes);
 
     process_data(db);
 
-    data_buffer_release(cache, db);
+    buffercache_release_buffer(cache, db);
     db = 0;
 
 }
@@ -895,20 +905,124 @@ That looks quite simpler as the second loop example.
 Moreover, you can easily cache all your DataBuffers whereever you use them
 just by calling either `data_buffer_get()` or `data_buffer_release`.
 
-The implementation of both methods will be rather forward:
+So, let's implement a cache for DataBuffers.
+Sticking to our dogma, first design the interface.
+In this case, it's more or less obvious wen looking at the example above:
+
+```C
+
+Ringbuffer* buffercache_create(size_t capacity);
+Buffer* buffercache_get_buffer(Ringbuffer* cache, size_t min_size_bytes);
+bool buffercache_release_buffer(Ringbuffer* cache, Buffer* buffer);
+
+```
+
+And design a proper test:
+
+```C
+
+void test_buffercache_caching() {
+
+    Ringbuffer* cache = buffercache_create(9);
+
+    const size_t capacity = cache->capacity(cache);
+    void* pointers[capacity];
+
+    /* First step - fill buffer */
+    for(size_t i = 0; i < capacity; ++i) {
+        pointers[i] = buffercache_get_buffer(cache, i);
+    }
+
+    for(size_t i = 0; i < capacity; ++i) {
+        buffercache_release_buffer(cache, pointers[i]);
+    }
+
+    /* No more buffers should be allocated - thus there should be 50 different
+     * pointers appearing and no more -
+     * we keep track in this array */
+
+    memset(pointers, 0, sizeof(pointers));
+
+    /* Shift some elements out of cache into ringbuffer */
+    for(size_t i = 0; i < 1000 * cache->capacity(cache); ++i) {
+        Buffer* item = buffercache_get_buffer(cache, i % capacity);
+        assert(item);
+
+        bool pointer_ok = false;
+
+        size_t index_found = 0;
+
+        for(size_t index = 0; index < capacity; ++index) {
+
+            if(item == pointers[index]) {
+                index_found = index;
+                pointer_ok = true;
+                break;
+            }
+
+            if(0 == pointers[index]) {
+                index_found = index;
+                pointers[index] = item;
+                pointer_ok = true;
+                break;
+            }
+
+        }
+
+        assert(pointer_ok);
+        assert(i % capacity <= item->capacity_bytes);
+
+        if(i < capacity) {
+            assert(i == index_found);
+        }
+        if(i > capacity) {
+            assert(i > index_found);
+        }
+
+
+        buffercache_release_buffer(cache, item);
+    }
+
+    assert(0 == cache->free(cache));
+
+    fprintf(stdout, "Caching ok\n");
+
+}
+
+
+```
+
+This is, of course, not a perfect test, since it does not check all
+aspects of the interface.
+
+The implementation of those three methods will be rather straight forward:
 
 ```c
 
-DataBuffer* data_buffer_get(Ringbuffer* cache, size_t min_length_bytes) {
+static void buffer_free(void* data_buffer, void* arg);
 
-    DataBuffer* db =  0;
+/******************************************************************************
+                               PUBLIC FUNCTIONS
+ ******************************************************************************/
+
+Ringbuffer* buffercache_create(size_t capacity) {
+
+    return ringbuffer_create(capacity, buffer_free, 0);
+
+}
+
+/*----------------------------------------------------------------------------*/
+
+Buffer* buffercache_get_buffer(Ringbuffer* cache, size_t min_length_bytes) {
+
+    Buffer* db =  0;
 
     if(0 != cache) {
         db = cache->pop(cache);
     }
 
     if(0 == db) {
-        db = calloc(1, sizeof(DataBuffer));
+        db = calloc(1, sizeof(Buffer));
     }
 
     if(db->capacity_bytes < min_length_bytes) {
@@ -929,26 +1043,32 @@ DataBuffer* data_buffer_get(Ringbuffer* cache, size_t min_length_bytes) {
 
 }
 
+/*----------------------------------------------------------------------------*/
 
-void data_buffer_release(Ringbuffer* cache, DataBuffer* db) {
+bool buffercache_release_buffer(Ringbuffer* cache, Buffer* buffer) {
 
-    if(0 != cache) {
-        cache->add(cache,db);
-        goto finish;
-    }
+    if(0 == cache) goto finish;
+    if(0 == buffer) goto finish;
+    
+    buffer->bytes_used = 0;
 
-    data_buffer_free(db);
+    return cache->add(cache, buffer);
 
 finish:
 
-    return;
+    return false;
 
 }
 
-void data_buffer_free(void* data_buffer, void* additional_arg) {
+/*----------------------------------------------------------------------------*/
 
-    if(0 == data_buffer) goto error;
-    DataBuffer* db = data_buffer;
+static void buffer_free(void* buffer, void* additional_arg) {
+
+    // UNUSED(additional_arg);
+
+    if(0 == buffer) goto error;
+
+    Buffer* db = buffer;
 
     if(0 != db->data) {
         free(db->data);
@@ -962,9 +1082,18 @@ error:
     return;
 
 }
+
 ```
 
 That's all that is to facilitating a Ringbuffer as a cache.
+
+Notice that in this interface, we did away with the `void*` nuisance by
+hiding it.
+This does not solve the main problem - the implementation of our buffer cache
+still struggles with types unsafety, but it does not forward this unsafe
+bit to the user of our interface.
+We cannot get rid of this problem, but we can prevent the users of our interface
+to have to deal with it, at least.
 
 ### Writing simple code: Nested Ifs
 
