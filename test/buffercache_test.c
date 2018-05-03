@@ -93,6 +93,7 @@ void test_buffercache_caching() {
         }
 
         assert(pointer_ok);
+        assert(i % capacity <= item->capacity_bytes);
 
         if(i < capacity) {
             assert(i == index_found);
@@ -100,6 +101,7 @@ void test_buffercache_caching() {
         if(i > capacity) {
             assert(i > index_found);
         }
+
 
         buffercache_release_buffer(cache, item);
     }
