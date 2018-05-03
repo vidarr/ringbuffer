@@ -31,7 +31,6 @@
  * GENCE  OR  OTHERWISE)  ARISING  IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include "../include/ringbuffer.h"
 #include "../include/buffercache.h"
 
@@ -39,7 +38,7 @@
                                PRIVATE PROTOTYPES
  ******************************************************************************/
 
-static void free_buffer(void* data_buffer, void* arg);
+static void buffer_free(void* data_buffer, void* arg);
 
 /******************************************************************************
                                PUBLIC FUNCTIONS
@@ -47,7 +46,7 @@ static void free_buffer(void* data_buffer, void* arg);
 
 Ringbuffer* buffercache_create(size_t capacity) {
 
-    return ringbuffer_create(capacity, free_buffer, 0);
+    return ringbuffer_create(capacity, buffer_free, 0);
 
 }
 
@@ -89,6 +88,8 @@ bool buffercache_release_buffer(Ringbuffer* cache, Buffer* buffer) {
 
     if(0 == cache) goto finish;
     if(0 == buffer) goto finish;
+    
+    buffer->bytes_used = 0;
 
     return cache->add(cache, buffer);
 
