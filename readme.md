@@ -1096,41 +1096,6 @@ bit to the user of our interface.
 We cannot get rid of this problem, but we can prevent the users of our interface
 to have to deal with it, at least.
 
-Now, if we want a ringbuffer to use a cache, i.e. if having to overwrite
-elements, instead of freeing them having it put the element into a cache?
-
-Easy enough: Just give `ringbuffer_create` the cache as `additional_arg`,
-and `buffercache_release_buffer` as `free_item` function.
-Ok, not quite that easy: Since `buffercache_release_buffer` and `free_item` got
-different signatures, we require an 'adapter' method:
-
-
-```c
-void cache_free(void* item, void* cache) {
-
-    if(0 == cache) goto finish;
-    if(0 == item) goto finish;
-
-    if(! buffercache_release_buffer((Ringbuffer*) cache, (Buffer*) buffer)) {
-
-        fprintf(stderr, "Freeing element failed\n");
-
-    }
-
-finish:
-
-    do{}while(0);
-
-}
-
-Ringbuffer* cache = ...;
-
-Ringbuffer* caching_ringbuffer = ringbuffer_create(20 cache_free, cache);
-```
-
-Voila, you got your cache, and whenever an item is going to be overwritten
-in caching_ringbuffer, it will instead be transferred back into the cache.
-
 ### Writing simple code: Nested Ifs
 
 Notice the particular control flow in these functions, particularly in
@@ -1227,15 +1192,282 @@ If you encounter yourself writing nested ifs, take some time to consider
 if there is a way to streamline this part of your code into a single-level
 if sequence. It will turn out to work surprisingly often.
 
+# Switching the implementation
+
+Now, if we want a ringbuffer to use a cache, i.e. if having to overwrite
+elements, instead of freeing them having it put the element into a cache?
+
+Easy enough: Just give `ringbuffer_create` the cache as `additional_arg`,
+and `buffercache_release_buffer` as `free_item` function.
+Ok, not quite that easy: Since `buffercache_release_buffer` and `free_item` got
+different signatures, we require an 'adapter' method:
+
+
+```c
+void cache_free(void* item, void* cache) {
+
+   /* strictly speaking superfuous since buffercache_release_buffer checks
+      again, but better check too often than to seldomly */
+    if(0 == cache) goto finish;
+    if(0 == item) goto finish;
+
+    if(! buffercache_release_buffer((Ringbuffer*) cache, (Buffer*) buffer)) {
+
+        fprintf(stderr, "Freeing element failed\n");
+
+    }
+
+finish:
+
+    do{}while(0);
+
+}
+
+Ringbuffer* cache = ...;
+
+Ringbuffer* caching_ringbuffer = ringbuffer_create(20 cache_free, cache);
+```
+
+Voila, you got your cache, and whenever an item is going to be overwritten
+in caching_ringbuffer, it will instead be transferred back into the cache.
+
+But what if, for some reason, you do not want to expose the cache,
+but suppose you want a ring buffer that brings its own internal cache, i.e.
+*is* its own cache, and yielding an interface like:
+
+```c
+
+Ringbuffer* caching_ringbuffer_create(
+        size_t capacity,
+        void (*free_item)(void* item, void* additional_arg),
+        void* free_item_additional_arg);
+
+/*----------------------------------------------------------------------------*/
+
+void* caching_ringbuffer_get_cached(Ringbuffer* crb);
+
+/*----------------------------------------------------------------------------*/
+
+bool caching_ringbuffer_release(Ringbuffer* crb, void* item);
+
+```
+
+Its debatable whether this really is a good idea, but that's not the point
+we want to reach.
+
+First of all, we need to use a different internal structure for our ringbuffer
+since it must also contain the cache:
+
+```c
+
+typedef struct InternalRingbuffer {
+
+    Ringbuffer public;
+    Ringbuffer* cache;
+
+} InternalRingbuffer;
+
+```
+
+But wait a second - the `public` Ringbuffer interface only contains the
+interface - where will all the internals of an ordinary Ringbuffer go, like our
+`next_entry_to_read` pointer?
+
+The next approach
+
+```c
+
+typedef struct InternalRingbuffer {
+
+    InternalRingbuffer super;
+    Ringbuffer* cache;
+
+} InternalRingbuffer;
+
+```
+
+is no solution either because we spent a lot of effort ensuring that
+`InternalRingbuffer` is not visible outside our ringbuffer module.
+
+But, what we can do is just the same as we do with the cache - *wrapping*
+the actual ringbuffer like so:
+
+```c
+
+typedef struct InternalCachingRingbuffer {
+
+    Ringbuffer public;
+    Ringbuffer* buffer;
+    Ringbuffer* cache;
+
+} InternalCachingRingbuffer;
+
+```
+
+Thus, some of the `caching_ringbuffer_create` method will look like this:
+
+```c
+
+Ringbuffer* caching_ringbuffer_create(
+        size_t capacity,
+        void (*free_item)(void* item, void* additional_arg),
+        void* free_item_additional_arg) {
+
+    InternalRingbuffer* internal = calloc(1, sizeof(InternalRingbuffer));
+    internal->cache =
+    ringbuffer_create(capacity, free_item, free_item_additional_arg);
+    internal->buffer = ringbuffer_create(capacity, cache_free, internal->cache);
+
+    return (Ringbuffer*) internal;
+
+}
+
+```
+
+But wait, if we would use this function like
+
+```c
+
+Ringbuffer* rb = caching_ringbuffer_create(10, my_free, 0);
+rb->add(rb, my_element);
+
+```
+
+We would end up with a plain `SEGFAULT` - because nobody ever initialized
+`rb->add` !
+What we wanted is obvious: `rb->buffer->add(rb->buffer, my_element)`.
+But this would be clumsy and a violation of our principle of hiding the
+internals from our users.
+But we already have seen a solution for this: *Wrapping*:
+
+```c
+
+static size_t capacity_func(Ringbuffer* self);
+
+static bool add_func(Ringbuffer* self, void* item);
+
+static void* pop_func(Ringbuffer* self);
+
+static Ringbuffer* free_func(Ringbuffer* self);
+
+/*----------------------------------------------------------------------------*/
+
+Ringbuffer* caching_ringbuffer_create(
+        size_t capacity,
+        void (*free_item)(void* item, void* additional_arg),
+        void* free_item_additional_arg) {
+
+    InternalRingbuffer* internal = calloc(1, sizeof(InternalRingbuffer));
+    internal->cache =
+    ringbuffer_create(capacity, free_item, free_item_additional_arg);
+    internal->buffer = ringbuffer_create(capacity, cache_free, internal->cache);
+
+    Ringbuffer->public = (Ringbuffer) {
+        .capacity = capacity_func,
+        .add = add_func,
+        .pop = pop_func,
+        .free = free_func,
+    };
+
+    return (Ringbuffer*) internal;
+
+}
+
+/*----------------------------------------------------------------------------*/
+
+static size_t capacity_func(Ringbuffer* self) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+    Ringbuffer* buffer = internal->buffer;
+
+    return buffer->capacity(buffer);
+
+error:
+
+    return 0;
+
+}
+
+/*----------------------------------------------------------------------------*/
+
+static bool add_func(Ringbuffer* self, void* item) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+    Ringbuffer* buffer = internal->buffer;
+
+    if(0 == buffer) goto error;
+
+    return buffer->capacity(buffer);
+
+error:
+
+    return 0;
+
+}
+
+/*----------------------------------------------------------------------------*/
+
+static void* pop_func(Ringbuffer* self) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+    Ringbuffer* buffer = internal->buffer;
+
+    if(0 == buffer) goto error;
+
+    return buffer->pop(buffer);
+
+error:
+
+    return 0;
+
+}
+
+/*----------------------------------------------------------------------------*/
+
+static Ringbuffer* free_func(Ringbuffer* self) {
+
+    if(0 == self) goto error;
+
+    InternalRingbuffer* internal = (InternalRingbuffer*) self;
+    Ringbuffer* buffer = internal->buffer;
+
+    if(0 == buffer) goto error;
+
+    internal->buffer = buffer->free_func(buffer);
+
+    buffer = internal->cache;
+    internal->cache = buffer->free_func(buffer);
+
+    free(self);
+
+    return 0;
+
+error:
+
+    return self;
+}
+
+```
+
+# A friendly warning
+
+// Performance issues
+
 # Footnotes & References
 
 [1] This approach is far more universal than just for software engineering -
 for analyzing complex systems, the general approach is to separate the system
 as simple and independent parts, and minimize the interactions between them.
 [2] First-in-First-Out. typical applications are queues,
- e.g. for communicating between threads. Actually, this very ringbuffer stems
+e.g. for communicating between threads. Actually, this very ringbuffer stems
 a audio streaming software project where it is used to pass PCM data between
- threads.
+threads.
 [3] Last-In-First-Out. Typically called 'stack' and used for parsing all kinds
 of languages, in interpreters and compilers, but also within the processor
 to store local variables and handling function calls and returns.

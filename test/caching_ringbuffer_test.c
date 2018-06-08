@@ -107,6 +107,22 @@ void test_caching_ringbuffer_get_cached() {
 
 /*----------------------------------------------------------------------------*/
 
+void test_caching_ringbuffer_release() {
+
+    int a = 0;
+
+    assert(! caching_ringbuffer_release(0, &a));
+
+    Ringbuffer* buffer = caching_ringbuffer_create(1, 0, 0);
+    assert(caching_ringbuffer_release(buffer, &a));
+    assert(&a == caching_ringbuffer_get_cached(buffer));
+    buffer = buffer->free(buffer);
+
+    fprintf(stdout, "caching ringbuffer_release OK\n");
+
+}
+/*----------------------------------------------------------------------------*/
+
 void test_caching_free() {
 
     const size_t NUM_ELEMENTS = 114;
@@ -170,6 +186,7 @@ int main(int argc, char** argv) {
     /* Caching tests */
     test_caching_ringbuffer_create();
     test_caching_ringbuffer_get_cached();
+    test_caching_ringbuffer_release();
     test_caching_free();
 
 }

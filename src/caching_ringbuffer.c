@@ -114,7 +114,7 @@ bool caching_ringbuffer_release(Ringbuffer* self, void* item) {
     InternalRingbuffer* internal = (InternalRingbuffer*) self;
     Ringbuffer* cache = internal->cache;
 
-    return cache->pop(cache);
+    return cache->add(cache, item);
 
 error:
 

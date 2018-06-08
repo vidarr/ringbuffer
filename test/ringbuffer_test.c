@@ -68,6 +68,7 @@ void count_free(void* int_pointer, void* count) {
     *c = *c + 1;
 
 }
+
 /*----------------------------------------------------------------------------*/
 
 void test_free() {
