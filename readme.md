@@ -106,7 +106,7 @@ all a user requires to use our ringbuffer.
 This is our interface.
 
 In C, a module consists of a source file and a header.
-Contrary to what you might have read in some beginners' bookss, putting *all*
+Contrary to what you might have read in some beginners' books, putting *all*
 declarations into the header is not a good practice at all, because *the
 header is the interface* of the module, the header is what the users will see
 of your module.
@@ -140,7 +140,7 @@ Ringbuffer* ringbuffer_create(
 ```
 
 That's it - that's our header. And surprisingly, in the course of this article,
-much will change, we will even provide 2 implementations in parallel,
+it won't change much, we will even provide 2 implementations in parallel,
 it will only grow with 2 additional functions.
 
 The trick is, to achieve this...
@@ -430,7 +430,7 @@ the internal data representation of a ringbuffer? Of course, this would be
 violating all of our principles.
 Thus, better not alter the definition of `Ringbuffer`.
 But - how to attach data to a struct without altering it's definition?
-Gracefully, the C standard provides a neat feature:
+Gracefully, the C standard provides a neat assertion:
 
 *A pointer to a struct is the same as a pointer to it's first element* [4].
 
@@ -440,7 +440,7 @@ This means, that
 
 Ringbuffer* buffer = ringbuffer_create(1, 0, 0);
 
-assert(buffer == buffer->capacity);
+assert(buffer == (Ringbuffer*) & buffer->capacity);
 ```
 
 For example.
@@ -470,6 +470,8 @@ since a pointer to `InternalRingbuffer` equals a pointer to
 ```c
 
 InternalRingbuffer internal = calloc(1, sizeof(InternalRingbuffer));
+/* initialize internal */
+...
 Ringbuffer* ringbuffer = (Ringbuffer*) internal;
 ringbuffer->add(ringbuffer, item);    /* Works perfectly */
 
@@ -733,7 +735,7 @@ use our Ringbuffer, because of the simplicity of its interface.
 
 One slight drawback in here is the need to stay flexible we have to resort back
 to `void*` types. This is in general nasty: It disables one of the key
-advantages statically typed langueages provide over dynamically typed languages
+advantages that statically typed languages provide over dynamically typed ones
 like Python: The ability to check *at compiletime*, thus *without runtime
 overhead*, avoid an entire class of programming errors.
 
@@ -761,7 +763,7 @@ tests*.
 So we got a neat ringbuffer, that will receive data and overwrite old
 data on insuffient memory.
 Lets try to use our ring buffer in some way.
-What could this actually useful for?
+What could this actually be useful for?
 We already discussed that it is perfectly suited for a stream of data has to
 be handed over to another thread for media streaming e.g.
 
@@ -784,10 +786,11 @@ However, most of the addresses will not be existing for real,
 Your process will be given a certain, contiguous block of *real* RAM memory,
  mapped into its virtual address space, let's say in betwen `0xffff` and
  `0xff00 0000`.
-All you can ask the system for is raise the bounds of this *real memory window*,
-let's say from `0xff00 0000` to `0xff00 ffff`.
-That is, however, not how `malloc(3)` behaves.
-That's because under the hood, `malloc(3)` performs quite a bit of management:
+All you can ask the system for is raising the bounds of this
+*real memory window*, let's say from `0xff00 0000` to `0xff00 ffff`.
+That is, however, not how `malloc(3)` behaves: you *can* ask `malloc(3)`
+for arbitrary chunks of memory.
+Under the hood, `malloc(3)` performs quite a bit of management:
 It keeps track of free memory blocks.
 If you request a certain number of bytes, `malloc(3)` will sweep through it's
 list looking for a suitable block.
@@ -939,7 +942,7 @@ void test_buffercache_caching() {
      * pointers appearing and no more -
      * we keep track in this array */
 
-    memset(pointers, 0, sizeof(pointers));
+    memset(pointers, 0, sizeof(pointers) * sizeof(void*));
 
     /* Shift some elements out of cache into ringbuffer */
     for(size_t i = 0; i < 1000 * cache->capacity(cache); ++i) {
@@ -1047,7 +1050,7 @@ bool buffercache_release_buffer(Ringbuffer* cache, Buffer* buffer) {
 
     if(0 == cache) goto finish;
     if(0 == buffer) goto finish;
-    
+
     buffer->bytes_used = 0;
 
     return cache->add(cache, buffer);
@@ -1093,6 +1096,41 @@ bit to the user of our interface.
 We cannot get rid of this problem, but we can prevent the users of our interface
 to have to deal with it, at least.
 
+Now, if we want a ringbuffer to use a cache, i.e. if having to overwrite
+elements, instead of freeing them having it put the element into a cache?
+
+Easy enough: Just give `ringbuffer_create` the cache as `additional_arg`,
+and `buffercache_release_buffer` as `free_item` function.
+Ok, not quite that easy: Since `buffercache_release_buffer` and `free_item` got
+different signatures, we require an 'adapter' method:
+
+
+```c
+void cache_free(void* item, void* cache) {
+
+    if(0 == cache) goto finish;
+    if(0 == item) goto finish;
+
+    if(! buffercache_release_buffer((Ringbuffer*) cache, (Buffer*) buffer)) {
+
+        fprintf(stderr, "Freeing element failed\n");
+
+    }
+
+finish:
+
+    do{}while(0);
+
+}
+
+Ringbuffer* cache = ...;
+
+Ringbuffer* caching_ringbuffer = ringbuffer_create(20 cache_free, cache);
+```
+
+Voila, you got your cache, and whenever an item is going to be overwritten
+in caching_ringbuffer, it will instead be transferred back into the cache.
+
 ### Writing simple code: Nested Ifs
 
 Notice the particular control flow in these functions, particularly in
@@ -1112,7 +1150,7 @@ Have a look at the `data_buffer_get()` function:
 2. If we do not have a data buffer yet, it tries to allocate a new one - no matter if the popping failed or for whatever reason there is not data buffer yet.
 3. Now we know that we have a data buffer, but we still do not know its state - does it have some `data` allocated already? Is the `data` array large enough?
 4. Again, treat one problem after the other: If the data array is too small, free it and set `data` to 0
-5. If `data` is 0, allocate it with a sufficient size. Again, it does not matter whether it is 0 because we allocated the data buffer` freshly or because we freed it due to its insufficient size.
+5. If `data` is 0, allocate it with a sufficient size. Again, it does not matter whether it is 0 because we allocated the data buffer freshly or because we freed it due to its insufficient size.
 6. Now we know that no matter how we came here, we got a data buffer, it is properly initialized and has sufficent capacity.
 
 Also, avoid else branches by just short-cutting behind the sequence of ifs
