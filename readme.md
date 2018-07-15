@@ -1304,7 +1304,36 @@ typedef struct InternalCachingRingbuffer {
 
 ```
 
-Thus, some of the `caching_ringbuffer_create` method will look like this:
+Let's implement it using our plain old procedure: Write some unit tests first:
+
+```c
+
+int main(int argc, char** argv) {
+
+    /* The interface tests */
+    size_t free_count = 0;
+
+    create = caching_ringbuffer_create;
+
+    Ringbuffer* cache = ringbuffer_create(31, count_free, &free_count);
+    free_item = cache_free;
+    free_item_additional_arg = cache;
+
+    test_ringbuffer_create();
+    test_capacity();
+    test_add();
+    test_pop();
+    cache->free(cache);
+    cache = 0;
+
+}
+
+```
+
+Note that we use our already existing `test_capacity`, `test_add` and `test_pop`
+test functions since they just check the interface and this did not change.
+
+Go on implementing the 'constructor':
 
 ```c
 
@@ -1324,7 +1353,8 @@ Ringbuffer* caching_ringbuffer_create(
 
 ```
 
-But wait, if we would use this function like
+But if we execute the tests, we encounter `SEGFAULTS`.
+The problem is, if we look at this code:
 
 ```c
 
@@ -1333,12 +1363,10 @@ rb->add(rb, my_element);
 
 ```
 
-We would end up with a plain `SEGFAULT` - because nobody ever initialized
-`rb->add` !
-What we wanted is obvious: `rb->buffer->add(rb->buffer, my_element)`.
-But this would be clumsy and a violation of our principle of hiding the
-internals from our users.
-But we already have seen a solution for this: *Wrapping*:
+But nobody ever initialized `rb->add` !
+
+What should be done here is obvious: `rb->buffer->add(rb->buffer, my_element)`.
+We already have seen a solution for this: *Wrapping*:
 
 ```c
 
@@ -1458,6 +1486,76 @@ error:
 # A friendly warning
 
 // Performance issues
+
+Although these methods look really elegant, there are, as with everything,
+drawbacks which you should always bear in mind:
+
+Indirections over pointers cause overhead, and this causes potential
+performance hits.
+
+If you decide to call a function
+
+    void f(13);
+
+directly like
+
+    f(13);
+
+what happens is that the linker/exe loader knows the position of `f` in memory
+and will insert its memory address directly at the position in the executable
+where the function is called.
+
+Fire up cgdb like
+
+    $ cgdb ringbuffer_test
+
+and let's look at the assembly code for our `free_func` method:
+
+    (gdb) disassemble  free_func
+    ...
+    0x0000000000000aa8 <+108>:	mov    (%rdx),%rdx
+    0x0000000000000aab <+111>:	mov    %rcx,%rsi
+    0x0000000000000aae <+114>:	mov    %rdx,%rdi
+    0x0000000000000ab1 <+117>:	callq  *%rax
+    0x0000000000000ab3 <+119>:	mov    -0x8(%rbp),%rax
+    0x0000000000000ab7 <+123>:	mov    %rax,%rdi
+    0x0000000000000aba <+126>:	callq  0x620 <free@plt>
+    0x0000000000000abf <+131>:	mov    -0x20(%rbp),%rax
+    0x0000000000000ac3 <+135>:	mov    %rax,-0x8(%rbp)
+    0x0000000000000ac7 <+139>:	mov    -0x8(%rbp),%rax
+    0x0000000000000acb <+143>:	cmp    -0x18(%rbp),%rax
+    0x0000000000000acf <+147>:	jne    0xa6f <free_func+51>
+    0x0000000000000ad1 <+149>:	mov    -0x28(%rbp),%rax
+    0x0000000000000ad5 <+153>:	mov    %rax,%rdi
+    0x0000000000000ad8 <+156>:	callq  0x620 <free@plt>
+    0x0000000000000add <+161>:	movq   $0x0,-0x28(%rbp)
+    0x0000000000000ae5 <+169>:	jmp    0xae8 <free_func+172>
+    0x0000000000000ae7 <+171>:	nop
+    0x0000000000000ae8 <+172>:	mov    -0x28(%rbp),%rax
+    0x0000000000000aec <+176>:	leaveq
+    0x0000000000000aed <+177>:	retq
+
+Notice `callq  0x620 <free@plt>` which is the call to `free()`: The memory address
+of the `free` function has been inserted into the code directly.
+
+And notice `callq *%rax` - this is the code generated for the call to
+`internal->free_item(...)` .
+There is no direct memory address, instead, the program had to store
+the memory address in the register `rax` and have the processor load the memory
+address of the function to call from this address: An additional load operation
+from memory is required to call a function via a function pointer.
+
+This might not seem disastrous, and indeed, it usually is negletible.
+But for high performance applications on embedded systems, it might become
+a nuisance.
+Just bear it in mind and if in doubt, perform benchmarks to figure out the
+actual performance hit if you suspect the hit to become relevant for your app.
+
+This holds all the more if you perform wrapping extensively like in our
+`caching_ringbuffer` object. the pop function is called indirectly, and then
+calls another pop function indirectly.
+instead of one function call, we end up with *two* function calls and *two*
+loads from memory.
 
 # Footnotes & References
 
