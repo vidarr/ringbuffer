@@ -1485,8 +1485,6 @@ error:
 
 # A friendly warning
 
-// Performance issues
-
 Although these methods look really elegant, there are, as with everything,
 drawbacks which you should always bear in mind:
 
@@ -1557,18 +1555,79 @@ calls another pop function indirectly.
 instead of one function call, we end up with *two* function calls and *two*
 loads from memory.
 
+# So how should one go on?
+
+After showing this approach of 'pulling down' OOP to C,
+should one just begin to try to wrap *abything* like that?
+
+The most important lesson I learned this far is: *There is no 'the one and true solution'*
+that yields best results in every situation - nowhere, and especially not in
+software development.
+
+There are a few principles one *should* stick to, like modularity, separation
+and encapsulation.
+
+But there are usually different paths that let you achieve those.
+Think of functional vs. procedural vs. object oriented programming.
+Since the 60s, academics stuck with LISP, a highly functional language - they
+considered it the true way.
+They achieved quite a bit, especially in developing language properties that
+modern languges often present us as revolutionary: Incremental garbage collection,
+just-in-time compilation and reflection.
+Their notion of the unit to manage code and data in was the *closure*.
+Then object-orientation took over in the late 80ies, with C++ being developed.
+LISP was considered poor in performance and just too hard to map onto real-life
+stack machines.
+Compilation was considered the way to go, and classes became the unit in which
+to manage code and data in.
+
+Nowadays, the benefits of closures and their little siblings, lambda expressions
+have been re-discovered.
+Honestly, I like to play around and do pure functional programming - that's why
+I implemented my own [LISP interpreter](https://github.com/vidarr/fulisp),
+but I don't see the big advantages why they even fucked up C++ with these
+concepts (honestly, C++ has been fucked up since the very beginning - C is hard
+to get right, undefined/implemention dependent behaviour all around the place -
+and C++ levered all these pitfalls one stage, wrapped dozens of layers of
+complexity around, tried to fix some things and fucking the language up even more - think
+of references that are promised to always point to a valid object, unless you
+let them point at an invalid one...).
+
+# Advises & rules of thumb
+
+That being said, wrapping your data *and* code into structs like that is
+a highly useful approach *under certain circumstances*.
+Meanwhile, it is an aweful thing to do *under certain circumstances*.
+
+It will be beneficial to wrapping your code like this if
+
+* You deal with methods that are likely to change, perhaps even at runtime.
+  It could be like in our example, where you got an entity with defined behaviou,
+  but the actual implementation is likely to change. 'Collections' like lists
+  etc. naturally fall under this group - think of a linked list vs. a list
+  implemented with an array. None is better, both have their advantages /
+  disadvantages. Thus better keep the code using those entities independed
+  of the implementation.
+
+* Or you have a variety of objects that should provide a common interface
+  to work with our app out-of-the-box due to the common interface.
+  Device drivers would be a good example.
+
 # Footnotes & References
 
 [1] This approach is far more universal than just for software engineering -
 for analyzing complex systems, the general approach is to separate the system
 as simple and independent parts, and minimize the interactions between them.
+
 [2] First-in-First-Out. typical applications are queues,
 e.g. for communicating between threads. Actually, this very ringbuffer stems
 a audio streaming software project where it is used to pass PCM data between
 threads.
+
 [3] Last-In-First-Out. Typically called 'stack' and used for parsing all kinds
 of languages, in interpreters and compilers, but also within the processor
 to store local variables and handling function calls and returns.
+
 [4] Draft C11 Standard, ISO/IEC 9899:201x, 6.7.2.1, Semantics, paragraph 15: 
 "A pointer to a structure  object,  suitably  converted,  points  to  its
 initial  member  (or  if  that  member  is  a bit-field,  then  to  the  unit
