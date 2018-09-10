@@ -1602,16 +1602,72 @@ Meanwhile, it is an aweful thing to do *under certain circumstances*.
 It will be beneficial to wrapping your code like this if
 
 * You deal with methods that are likely to change, perhaps even at runtime.
-  It could be like in our example, where you got an entity with defined behaviou,
-  but the actual implementation is likely to change. 'Collections' like lists
-  etc. naturally fall under this group - think of a linked list vs. a list
-  implemented with an array. None is better, both have their advantages /
-  disadvantages. Thus better keep the code using those entities independed
-  of the implementation.
+  It could be like in our example, where you got an entity with defined
+  behaviour, but the actual implementation is likely to change. 'Collections'
+  like lists etc. naturally fall under this group - think of a linked list
+  vs. a list implemented with an array. None is better, both have their
+  advantages / disadvantages.
+  Thus better keep the code using those entities independed of the
+  implementation.
 
 * Or you have a variety of objects that should provide a common interface
   to work with our app out-of-the-box due to the common interface.
   Device drivers would be a good example.
+
+* Always hunt for simplicity! In the case of this ringbuffer, think about whether
+  it is necessary that the ringbuffer takes care of the destruction of
+  obsolete elements. Traditionally, a common pattern implemented by all kinds
+  of data structures is implementing the add - function in this manner:
+  ```void* add(Ringbuffer* rb, void* element);```
+  where the element to be dropped is simply returned.
+  This is an interface of astounding simplicity, and I try to stick to it
+  whenever feasible. However, in our case this would have prohibited the
+  implementation of `cached_ringbuffer`.
+  This leads to another point that deserves it's own paragraph:
+
+# THINK AND QUESTION
+
+*Always*, *always* don't just do things *because* you were told to -
+even if it is best practise. Try to understand the benefits of this practise.
+Question whether there would be a better solution.
+Best practices keep shifting in the course  of time, when I started programming
+I did not know a single person who knew about closures - I knew them only from
+my beloved Lisp, from books written in the 80s. From the languages I came in
+touch with at work only Perl offered support for closures, and nobody understood
+what the code did when I used one.
+Closures are not required, they can easily be replaced by object oriented
+means - objects. Likewise, objects can be replaced easily by closures.
+The preffered means keep shifting, in the 80s in the academic world it seems
+closures where the way to go, in rest of the world OOP was the trail everybody
+followed. There was a reason behind: Closures are hard to map onto register
+machinges like our real world machines. *They still are*, at leas writing
+interpreters / compilers supporting them in a reasonable performant manner.
+Closures raise again, having found their way in a (crippled) fashion even into
+the ugliest of all dinosaurs - C++.
+Why? You can write tighter code in many cases, but at the expense of increasing
+the hidden complexity of the program significantly.
+I don't want to argue for or against closures, I said I like using them.
+But: Think about them! Make up your mind, don't just use them *because everybody*
+uses them - try out new features, new ways to go, new tools, IDEs, Profiling
+Code Checkers etc. but: Revise their usefulness.
+Revise your way of writing code *all the time*, revise your procedures, guidelines,
+keep moving. Question everything, try to understand and *search for better ways*.
+
+Rules of thumbs are for beginners, pros should understand that there hardly are
+rules that always yield the best result under all circumstances. Best practices
+are governed by trends, they shift.
+
+Don't take the approach to use C presented in here as 'the truth'.
+
+The only things that at the time of this writing appear to me to hold on are the
+fundamental principles of how to handle complexity that I mentioned in the
+beginning: Separate, modularize, split a complex system into units as small and
+independent as possible, keep the modules separated, minimize their interfaces.
+
+Start right now: We used the ringbuffer to implement a cache.
+Go back and ask yourself: Where is the fundamental flaw of it?
+Hint: Look at the goal we wanted to achieve by providing this cache and ask
+yourself: Is this implementation able to achieve this goal?
 
 # Footnotes & References
 
