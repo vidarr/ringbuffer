@@ -803,6 +803,10 @@ In order to counter total fragmentation, it will try to merge to adjacent
 available blocks into one bigger one.
 One could call it a poor man's crippled garbage collector.
 
+(This applies for uixoid operation systems, I don't know about the Windows NT
+family. If you are interested in this topic, see the
+[manual of the GNU libc](https://gnu.org/software/libc/manual/html_node/Memory-Concepts.html)).
+
 A lot of stuff that usually goes unnoticed - And costs time.
 Thus at some point of optimisation, it pays off to avoid *mallocs*.
 How can this be achieved?
