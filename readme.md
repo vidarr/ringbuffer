@@ -1633,7 +1633,43 @@ It will be beneficial to wrapping your code like this if
 
 One mantra in software development is that documentation is just as important
 as the code itself.
-And an just-as-well established pattern is that code won't get documented at all,
+
+And just before going on, one will notice that there are different tiers
+which can be documented:
+
+Looking at the ringbuffer, the average person might not be too familiar about
+what a ringbuffer is in the first place. Documenation should cover that topic,
+and thinking of documentation as of a accompying manual, explaining the big
+picture, the aims an interface pursues, its basic ideas and a red thread
+on how it works in general ought to go first and is in general, always worth
+to be written.
+It usually needs not to be to elaborate, but keen on giving key information
+ that is required to *use* the interface.
+In the ringbuffer, this is achieved by adding documentation just before the
+ringbuffer struct:
+
+```c
+
+/**
+ * A ringbuffer is a first-in first-out queue with a fixed capacity.
+ * It handles arbitrary pointers.
+ * If an attempt is made to add a pointer to a filled ringbuffer, the
+ * oldest pointer in the ringbuffer is overwritten.
+ */
+typedef struct Ringbuffer Ringbuffer;
+
+```
+
+Don't get lost in implementation details, but restrict yourself to the things
+somebody that wants to use it needs to know in order to use the interface
+and won't  get by looking at each separate function.
+I need not to mention that this documentation is to be considered part of the
+interface itself, and should therefore be placed *in the appropriate header*.
+
+Secondly, there is the need for in-detail documentation for each function.
+In the next paragraphs, I am restrict myself to this in-detail documentation.
+
+However, a just-as-well established pattern is that code won't get documented at all,
 has been documented but then changed without the old, then wrong documentation
 still hanging around or is documented in a fake way - just think on the
 omnipresent javadoc/doxygen docstrings like:
@@ -1647,7 +1683,18 @@ unsigned get_state(void);
 
 ```
 
-Hm, the function is sort of documented, but honestly, was it worth the typing?
+First of all, this documenation does something really well - it sticks to the
+principle that the documentation should be as close to the things it documents
+as possible. What does this mean? First of all, the the interface (in code) should
+not be separated from its documentation, that is for C, the documenation for
+an interface that is defined in a file `my_api.h` should be *within the header*.
+Secondly, the documentation for a function should be next to the function
+prototype.
+It is even better, if you don't just add documenting comments, but use
+a documentation tool, like doxygen or javadoc (depending on the language).
+
+Apart from that, the function is sort of documented, but honestly, was the
+documentation worth the typing?
 
 Bearing all that in mind, and add the fact that developers are, just like anybody,
 lazy and neither want to write documentation nor want to read through lengthily
@@ -1702,7 +1749,7 @@ the costs for implementing them:
 1. Wrong documentation: Requires effort, how much exactly depends
 2. No documentation: No costs whatsoever
 3. Incomplete documentation: Requires more effort than 2.
-4. Complete documentation: Requires a substantial amount of work, I guess one third of the entire development efforts for a module is a good estimate
+4. Complete documentation: Requires a substantial amount of work, I guess one third of the entire development efforts for a module is a rule of thumb for the lower bound
 
 
 So, the first thing to say is: If you do not plan to spend at least one third of

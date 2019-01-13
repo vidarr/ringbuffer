@@ -40,6 +40,12 @@
 
 /*----------------------------------------------------------------------------*/
 
+/**
+ * A ringbuffer is a first-in first-out queue with a fixed capacity.
+ * It handles arbitrary pointers.
+ * If an attempt is made to add a pointer to a filled ringbuffer, the
+ * oldest pointer in the ringbuffer is overwritten.
+ */
 typedef struct Ringbuffer {
 
     /**
