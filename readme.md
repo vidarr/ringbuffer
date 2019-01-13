@@ -1629,6 +1629,260 @@ It will be beneficial to wrapping your code like this if
   implementation of `cached_ringbuffer`.
   This leads to another point that deserves it's own paragraph:
 
+# On documenting code
+
+One mantra in software development is that documentation is just as important
+as the code itself.
+And an just-as-well established pattern is that code won't get documented at all,
+has been documented but then changed without the old, then wrong documentation
+still hanging around or is documented in a fake way - just think on the
+omnipresent javadoc/doxygen docstrings like:
+
+```c
+
+/**
+ * @return the state
+ */
+unsigned get_state(void);
+
+```
+
+Hm, the function is sort of documented, but honestly, was it worth the typing?
+
+Bearing all that in mind, and add the fact that developers are, just like anybody,
+lazy and neither want to write documentation nor want to read through lengthily
+documentation unless beaten to, I think there
+are different levels of documentation. From worse to better, those are:
+
+1. Just bad: Wrong documentation
+2. Better, probably still bad: Missing documentation
+3. Better, albeit still not good: Correct, but incomplete documentation
+3. Good: Correct, complete documentation
+
+However, the jump from 1. (wrong docs) to 2. (no docs) is far bigger than the
+jump from 2. to 3. (correct, incomplete documentation).
+
+If you get outdated documentation along with your interfaces, and you bother
+reading the documentation, you might encounter weird errors whose root causes
+will be obscured by the wrong documentation by dragging your debugging efforts
+into the wrong direction.
+
+Consider, e.g. this not too well designed interface:
+
+```c
+
+/**
+ * @return the state, >100 denotes error
+ */
+unsigned get_state(void);
+
+```
+
+And assume somebody 'fixed' this function by shifting the unexpected special case
+100 to 0, but forgetting to update the documentation.
+Now, you, the potential user of this function, either decide to not trust the
+ documentation, ignoring it and investigating on your own (in this case the
+ documentation is useless), or you decide to trust the documentation, then you
+ will run into weird behaviour until you finally decide to give the source code
+ of the function a closer look (or the entire module it belongs to).
+
+It would have been better to just not to document the function at all, than to
+leave the wrong documentation there.
+
+So, the consequence is clear: Document as much as possible, as thoroughly as
+possible, right?
+
+But, why does so little folk out there stick to this rule? Why is so much
+poorly documented code out there?
+
+The answer is:
+Documenting is expensive. give those documentation levels above another go with
+the costs for implementing them:
+
+1. Wrong documentation: Requires effort, how much exactly depends
+2. No documentation: No costs whatsoever
+3. Incomplete documentation: Requires more effort than 2.
+4. Complete documentation: Requires a substantial amount of work, I guess one third of the entire development efforts for a module is a good estimate
+
+
+So, the first thing to say is: If you do not plan to spend at least one third of
+your time documenting your code, just don't do it.
+
+This might seem an aweful recommendation, and if you are lucky to be both
+eager to document and able to because you don't code under pressure, then don't
+follow it.
+But, however, it will be beneficial for you as well to continue reading.
+
+If you document your code, you raise the bounds for others to modify it later on.
+
+That is what you do not want in your internal implementations, which should be
+easy to be swapped. So, spare your time, and instead of trying to document
+the guts of your implementation, better invest this time in thoroughly document
+your public interface.
+Just a side note: From what we said sooner on, documentation of the interface is
+ something that should be considered part of the public part, thus for C, it
+ should go *INTO THE HEADER, not the source code*.
+
+There are certain traits that, if followed, minimize the amount of
+documentation that *would* have to be written in the first place.
+
+A general trait in development is: Avoid repetitions. That is why you want to
+normalize databases when feasible, that's why you should keep your interfaces
+minimal.
+Applied to documenation, always ask yourself: What information is already there
+without explicit documentation? You can provide a lot of information without
+explicitly having to write documentation.
+
+Reconsider the above example:
+
+
+```c
+
+/**
+ * @return the state, >100 denotes error
+ */
+unsigned get_state(void);
+
+```
+
+Why is the documentation string hilarious? Because it mostly *repeats*
+information that is there even if the documentation is not there:
+The name already implies that a state is returned, thus its redundant to
+having to repeat this information in the doc string.
+
+Following C.C. Martin, if you design for small functions that just do
+one thing (a technique being beneficial because of various reasongs), it is easier
+to find descriptive names for your functions. If your functions got descriptive
+names, you can avoid documenting them in the first place. A simple example:
+
+Guess how this function behaves:
+
+```c
+
+int a5t(int a);
+
+```
+
+Can you anticipate what this function does?
+Now look at this function:
+
+
+```c
+
+int add_5_to(int a);
+
+```
+
+Can you anticipate what this function does?
+Ask yourself, what information is not there that should be there?
+What remains to be explained for this function?
+
+If the function only worked on non-negative integers, that would surely
+make a documentation mandatory, wouldn't it?
+
+But on the other hand, you could just design your function appropriately in the
+first place:
+
+```c
+
+unsigned add_5_to(unsigned a);
+
+```
+
+Now it is clear that the function only takes non-negative integers without the
+need of having to document it explicitly.
+What is even far better with this solution, apart from avoiding needless
+documentation: The compiler *enforces* that there are only non-negatives passed
+into the function (well, it will at least complain).
+That is, you don't have to read the documentation, and you also don't have to
+remember it, because the compiler will remember for you.
+
+That is another general rule of thumb: Whenever possible, facilitate the
+compiler to check for you.
+This lesson has been learned by language designers long ago, and that is why
+in many newer languages there exists the possibility to ammend functions.
+Consider a function in your interface which you decide should be deprecated.
+
+In Java, you can *annotate* the function and have the compiler issue a warning
+whenever it is used:
+
+```java
+
+@Deprecated
+int add_5_to(int a);
+
+```
+
+Everybody notices at the first glance that this function is deprecated, thus
+the deprecation needs not be mentioned in the first place. And additionally, the
+compiler will aid the user of your interface by warning him whenever he
+uses this deprecated function nevertheless.
+
+now, focus back on C, standard C does not provide for annotations of functions
+(or, at least, just to a very limited amount, like the `noreturn` modifier).
+
+However, annotating code is one of the uses of macros that I consider
+entirely justified.
+
+In C, assume we could do the following:
+
+```c
+
+int a5t(int a) DEPRECATED("Use add_5_to instead");
+
+```
+Annotations like these are not standardized,
+ but we could start off with a dummy definition anyways:
+
+```c
+
+#define DEPRECATED(message)
+
+```
+
+What do we gain if we stopped here, in comparison to just throwing in some documenation string?
+
+1. We document in a formal way that a function is deprecated
+2. Since it is formal, we allow for supplying a proper definition of the macro later on
+
+Speaking of supplying a proper definition for the macro, but different compilers
+provide compiler specific things,
+ the GNU C the `__attribute__` / `__attribute__(("deprecated"))`
+feature.
+
+So, we could do something like the following:
+
+```c
+
+#if ! defined __GNUC__
+
+#define DEPRECATED(message)
+
+// Starting with gcc 4.5 , an additional message is supported
+#elif __GNUC__ > 5
+
+#define DEPRECATED(message) __attribute__((deprecated(message)))
+
+#else
+
+#define DEPRECATED(message) __attribute__((deprecated))
+
+#endif
+
+```
+
+Now if we don't use the GNU C compiler, the macro is still just dropped, and
+we don't gain much, but loose nothing.
+
+If we use the GNU C compiler, whenever someone calls this function,
+the compiler issues a deprecation warning, in version 5 or higher even
+noticing the user what function he should use instead, which is fantastic!
+
+So, one could summarize this section into a new mantra of documentation:
+The best kind of documentation is the documentation that is not there *because
+it is not required* .
+
+
 # THINK AND QUESTION
 
 *Always*, *always* don't just do things *because* you were told to -
