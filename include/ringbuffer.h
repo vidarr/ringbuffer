@@ -31,6 +31,9 @@
  * GENCE  OR  OTHERWISE)  ARISING  IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * This file provides a ringbuffer. See the Ringbuffer struct.
+ */
 #ifndef __RINGBUFFER_H__
 #define __RINGBUFFER_H__
 /*----------------------------------------------------------------------------*/

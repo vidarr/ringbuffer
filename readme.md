@@ -1669,9 +1669,9 @@ interface itself, and should therefore be placed *in the appropriate header*.
 Secondly, there is the need for in-detail documentation for each function.
 In the next paragraphs, I am restrict myself to this in-detail documentation.
 
-However, a just-as-well established pattern is that code won't get documented at all,
+There is another established pattern: Code won't get documented at all,
 has been documented but then changed without the old, then wrong documentation
-still hanging around or is documented in a fake way - just think on the
+still hanging around, or code is documented only formally - just think of the
 omnipresent javadoc/doxygen docstrings like:
 
 ```c
@@ -1727,7 +1727,7 @@ unsigned get_state(void);
 
 And assume somebody 'fixed' this function by shifting the unexpected special case
 100 to 0, but forgetting to update the documentation.
-Now, you, the potential user of this function, either decide to not trust the
+Now, you, the potential user of this function, either decide not to trust the
  documentation, ignoring it and investigating on your own (in this case the
  documentation is useless), or you decide to trust the documentation, then you
  will run into weird behaviour until you finally decide to give the source code
@@ -1737,7 +1737,7 @@ It would have been better to just not to document the function at all, than to
 leave the wrong documentation there.
 
 So, the consequence is clear: Document as much as possible, as thoroughly as
-possible, right?
+possible, don't you?
 
 But, why does so little folk out there stick to this rule? Why is so much
 poorly documented code out there?
